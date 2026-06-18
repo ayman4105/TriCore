@@ -7,10 +7,10 @@
 
 IFX_ALIGN(4) IfxCpu_syncEvent cpuSyncEvent = 0; /* Create CPU synchronization event */
 
-#define DHT11_PIN &MODULE_P33, 3    /* Define DHT11 DATA pin: X102 pin 15 = P33.3 */
+#define DHT11_PIN &MODULE_P33, 3    /* Define DHT11 DATA pin: P33.3 */
 #define BUZZER_PIN &MODULE_P33, 0   /* Define onboard buzzer pin: P33.0 */
 
-#define TEMP_THRESHOLD_C 35U        /* Alarm threshold, change to 30U if you want buzzer at current temperature */
+#define TEMP_THRESHOLD_C 18U        /* Alarm threshold temperature */
 
 #define DHT11_START_LOW_MS 20U      /* DHT11 start signal LOW time */
 #define DHT11_POWER_UP_MS 2000U     /* Wait after power-up before first DHT11 read */
@@ -28,32 +28,30 @@ IFX_ALIGN(4) IfxCpu_syncEvent cpuSyncEvent = 0; /* Create CPU synchronization ev
 
 #define BUZZER_HALF_PERIOD_US 244U  /* Half period for about 2048 Hz buzzer tone */
 
-/* Store raw DHT11 data */
+/* Store raw DHT11 data internally */
 typedef struct
 {
-    uint8 humidityInteger;          /* Store humidity integer byte */
-    uint8 humidityDecimal;          /* Store humidity decimal byte */
+    uint8 humidityInteger;          /* Store humidity integer byte internally */
+    uint8 humidityDecimal;          /* Store humidity decimal byte internally */
     uint8 temperatureInteger;       /* Store temperature integer byte */
     uint8 temperatureDecimal;       /* Store temperature decimal byte */
     uint8 checksum;                 /* Store checksum byte */
 } Dht11_Data;
 
-/* Store DHT11 data ready for cluster/Ethernet */
+/* Store only temperature data for cluster/Ethernet */
 typedef struct
 {
-    uint32 sequenceCounter;         /* Increment every new sample */
+    uint32 sequenceCounter;         /* Increment every new temperature sample */
     uint32 temperatureC;            /* Temperature as integer, example 33 */
-    uint32 humidityPercent;         /* Humidity as integer, example 75 */
     uint32 temperatureCx10;         /* Temperature x10, example 330 means 33.0 C */
-    uint32 humidityPercentX10;      /* Humidity x10, example 750 means 75.0 percent */
-    uint32 valid;                   /* 1 means data is valid, 0 means invalid */
+    uint32 valid;                   /* 1 means temperature is valid, 0 means invalid */
     uint32 status;                  /* 0 means success, other values mean DHT11 error */
     uint32 alarmActive;             /* 1 means alarm active, 0 means alarm off */
-} Cluster_Dht11Data;
+} Cluster_TemperatureData;
 
-/* Global cluster data. Ethernet code will read this struct later. */
-volatile Cluster_Dht11Data g_clusterDht11Data = {0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U}; /* Store latest cluster-ready DHT11 data */
-volatile uint32 g_clusterSequenceCounter = 0U; /* Count DHT11 samples */
+/* This is the struct that Ethernet/Cluster code will read later */
+volatile Cluster_TemperatureData g_clusterTemperatureData = {0U, 0U, 0U, 0U, 0U, 0U}; /* Store latest temperature-only data */
+volatile uint32 g_temperatureSequenceCounter = 0U; /* Count temperature samples */
 
 /* Debug variables */
 volatile uint8 g_lastError = 0U;       /* Store last error code for debugger */
@@ -61,7 +59,7 @@ volatile uint8 g_lastRaw[5] = {0U};    /* Store last raw frame for debugger */
 
 volatile uint32 g_debugResult = 0U;    /* Store last DHT11 read result as number */
 volatile uint32 g_debugTemp = 0U;      /* Store temperature as number */
-volatile uint32 g_debugHum = 0U;       /* Store humidity as number */
+volatile uint32 g_debugTempX10 = 0U;   /* Store temperature x10 as number */
 volatile uint32 g_debugAlarm = 0U;     /* Store alarm state as number */
 volatile uint32 g_debugSequence = 0U;  /* Store sample counter as number */
 volatile uint8 g_debugDataLevel = 0U;  /* Store DATA pin level */
@@ -255,8 +253,8 @@ uint8 dht11ReadData(Dht11_Data *data)
         return 6U; /* Checksum failed */
     }
 
-    data->humidityInteger = rawData[0]; /* Copy humidity integer */
-    data->humidityDecimal = rawData[1]; /* Copy humidity decimal */
+    data->humidityInteger = rawData[0]; /* Copy humidity integer internally */
+    data->humidityDecimal = rawData[1]; /* Copy humidity decimal internally */
     data->temperatureInteger = rawData[2]; /* Copy temperature integer */
     data->temperatureDecimal = rawData[3]; /* Copy temperature decimal */
     data->checksum = rawData[4]; /* Copy checksum */
@@ -266,69 +264,63 @@ uint8 dht11ReadData(Dht11_Data *data)
     return 0U; /* Read success */
 }
 
-/* Update cluster-ready struct from DHT11 result */
-void updateClusterDht11Data(uint8 result, const Dht11_Data *dht11Data)
+/* Update temperature-only cluster struct */
+void updateClusterTemperatureData(uint8 result, const Dht11_Data *dht11Data)
 {
     boolean interruptState; /* Store interrupt state */
 
     interruptState = IfxCpu_disableInterrupts(); /* Protect global struct update */
 
-    g_clusterSequenceCounter++; /* Increment sample counter */
+    g_temperatureSequenceCounter++; /* Increment sample counter */
 
-    g_clusterDht11Data.sequenceCounter = g_clusterSequenceCounter; /* Store sample counter */
-    g_clusterDht11Data.status = (uint32)result; /* Store DHT11 read result */
+    g_clusterTemperatureData.sequenceCounter = g_temperatureSequenceCounter; /* Store sample counter */
+    g_clusterTemperatureData.status = (uint32)result; /* Store DHT11 read result */
 
     if (result == 0U) /* Check if DHT11 read succeeded */
     {
-        g_clusterDht11Data.valid = 1U; /* Mark data as valid */
-        g_clusterDht11Data.temperatureC = (uint32)dht11Data->temperatureInteger; /* Store temperature as integer */
-        g_clusterDht11Data.humidityPercent = (uint32)dht11Data->humidityInteger; /* Store humidity as integer */
-        g_clusterDht11Data.temperatureCx10 = ((uint32)dht11Data->temperatureInteger * 10U) + (uint32)dht11Data->temperatureDecimal; /* Store temperature x10 */
-        g_clusterDht11Data.humidityPercentX10 = ((uint32)dht11Data->humidityInteger * 10U) + (uint32)dht11Data->humidityDecimal; /* Store humidity x10 */
+        g_clusterTemperatureData.valid = 1U; /* Mark temperature as valid */
+        g_clusterTemperatureData.temperatureC = (uint32)dht11Data->temperatureInteger; /* Store temperature as integer */
+        g_clusterTemperatureData.temperatureCx10 = ((uint32)dht11Data->temperatureInteger * 10U) + (uint32)dht11Data->temperatureDecimal; /* Store temperature x10 */
 
         if (dht11Data->temperatureInteger >= TEMP_THRESHOLD_C) /* Check alarm threshold */
         {
-            g_clusterDht11Data.alarmActive = 1U; /* Set alarm active */
+            g_clusterTemperatureData.alarmActive = 1U; /* Set alarm active */
         }
         else
         {
-            g_clusterDht11Data.alarmActive = 0U; /* Set alarm inactive */
+            g_clusterTemperatureData.alarmActive = 0U; /* Set alarm inactive */
         }
     }
     else
     {
-        g_clusterDht11Data.valid = 0U; /* Mark data as invalid */
-        g_clusterDht11Data.temperatureC = 0U; /* Clear temperature */
-        g_clusterDht11Data.humidityPercent = 0U; /* Clear humidity */
-        g_clusterDht11Data.temperatureCx10 = 0U; /* Clear scaled temperature */
-        g_clusterDht11Data.humidityPercentX10 = 0U; /* Clear scaled humidity */
-        g_clusterDht11Data.alarmActive = 0U; /* Clear alarm */
+        g_clusterTemperatureData.valid = 0U; /* Mark temperature as invalid */
+        g_clusterTemperatureData.temperatureC = 0U; /* Clear temperature */
+        g_clusterTemperatureData.temperatureCx10 = 0U; /* Clear scaled temperature */
+        g_clusterTemperatureData.alarmActive = 0U; /* Clear alarm */
     }
 
     IfxCpu_restoreInterrupts(interruptState); /* Restore interrupts */
 
     g_debugResult = (uint32)result; /* Store result for debugger */
-    g_debugTemp = g_clusterDht11Data.temperatureC; /* Store temperature for debugger */
-    g_debugHum = g_clusterDht11Data.humidityPercent; /* Store humidity for debugger */
-    g_debugAlarm = g_clusterDht11Data.alarmActive; /* Store alarm state for debugger */
-    g_debugSequence = g_clusterDht11Data.sequenceCounter; /* Store sequence counter for debugger */
+    g_debugTemp = g_clusterTemperatureData.temperatureC; /* Store temperature for debugger */
+    g_debugTempX10 = g_clusterTemperatureData.temperatureCx10; /* Store temperature x10 for debugger */
+    g_debugAlarm = g_clusterTemperatureData.alarmActive; /* Store alarm state for debugger */
+    g_debugSequence = g_clusterTemperatureData.sequenceCounter; /* Store sequence counter for debugger */
 }
 
-/* Copy latest cluster data to another struct */
-void getClusterDht11Data(Cluster_Dht11Data *outData)
+/* Copy latest temperature data to another struct */
+void getClusterTemperatureData(Cluster_TemperatureData *outData)
 {
     boolean interruptState; /* Store interrupt state */
 
     interruptState = IfxCpu_disableInterrupts(); /* Protect global struct read */
 
-    outData->sequenceCounter = g_clusterDht11Data.sequenceCounter; /* Copy sample counter */
-    outData->temperatureC = g_clusterDht11Data.temperatureC; /* Copy temperature */
-    outData->humidityPercent = g_clusterDht11Data.humidityPercent; /* Copy humidity */
-    outData->temperatureCx10 = g_clusterDht11Data.temperatureCx10; /* Copy temperature x10 */
-    outData->humidityPercentX10 = g_clusterDht11Data.humidityPercentX10; /* Copy humidity x10 */
-    outData->valid = g_clusterDht11Data.valid; /* Copy valid flag */
-    outData->status = g_clusterDht11Data.status; /* Copy status */
-    outData->alarmActive = g_clusterDht11Data.alarmActive; /* Copy alarm flag */
+    outData->sequenceCounter = g_clusterTemperatureData.sequenceCounter; /* Copy sample counter */
+    outData->temperatureC = g_clusterTemperatureData.temperatureC; /* Copy temperature */
+    outData->temperatureCx10 = g_clusterTemperatureData.temperatureCx10; /* Copy temperature x10 */
+    outData->valid = g_clusterTemperatureData.valid; /* Copy valid flag */
+    outData->status = g_clusterTemperatureData.status; /* Copy status */
+    outData->alarmActive = g_clusterTemperatureData.alarmActive; /* Copy alarm flag */
 
     IfxCpu_restoreInterrupts(interruptState); /* Restore interrupts */
 }
@@ -415,13 +407,13 @@ void core0_main(void)
 
     while (1) /* Main loop */
     {
-        result = dht11ReadData(&dht11Data); /* Read DHT11 temperature and humidity */
+        result = dht11ReadData(&dht11Data); /* Read full DHT11 frame internally */
 
-        updateClusterDht11Data(result, &dht11Data); /* Put DHT11 values inside cluster-ready struct */
+        updateClusterTemperatureData(result, &dht11Data); /* Store only temperature in cluster-ready struct */
 
-        if (g_clusterDht11Data.valid == 1U) /* Check if DHT11 data is valid */
+        if (g_clusterTemperatureData.valid == 1U) /* Check if temperature data is valid */
         {
-            if (g_clusterDht11Data.alarmActive == 1U) /* Check alarm flag from struct */
+            if (g_clusterTemperatureData.alarmActive == 1U) /* Check alarm flag from temperature struct */
             {
                 buzzerBeep(1200U); /* Sound alarm */
             }
