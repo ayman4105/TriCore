@@ -1,0 +1,60 @@
+﻿# ==============================
+# AURIX / Eclipse workspace
+# ==============================
+
+.metadata/
+RemoteSystemsTempFiles/
+
+# ==============================
+# AURIX generated libraries
+# ==============================
+
+**/Libraries/
+
+# ==============================
+# AURIX build output folders
+# ==============================
+
+**/TriCore Debug (TASKING)/
+**/TriCore Release (TASKING)/
+**/Debug/
+**/Release/
+**/Output/
+
+# ==============================
+# Generated build files
+# ==============================
+
+*.o
+*.d
+*.src
+*.elf
+*.hex
+*.map
+*.lst
+*.bin
+*.srec
+*.a
+
+# ==============================
+# Logs / temporary files
+# ==============================
+
+*.log
+*.tmp
+*.bak
+
+# ==============================
+# Windows files
+# ==============================
+
+Thumbs.db
+desktop.ini
+
+# ==============================
+# Editor files
+# ==============================
+
+.vscode/
+.idea/
+*.swp
