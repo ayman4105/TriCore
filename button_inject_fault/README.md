@@ -475,77 +475,7 @@ buzzer OFF
 
 ---
 
-## 9. Build Notes
-
-### Include path
-
-Add this include path:
-
-```text
-${ProjDirPath}/Application/Inc
-```
-
-Path:
-
-```text
-Right click project
--> Properties
--> C/C++ Build
--> Settings
--> TASKING C/C++ Compiler
--> Include paths
--> Add
-```
-
-### Make sure `.c` files are included in build
-
-For each file:
-
-```text
-Application/Src/Button.c
-Application/Src/Buzzer.c
-Application/Src/Fault_Manager.c
-Application/Src/Ethernet_Handler.c
-```
-
-Check:
-
-```text
-Right click file
--> Resource Configurations
--> Exclude from Build
-```
-
-All configurations should be unchecked.
-
-Correct:
-
-```text
-[ ] TriCore Debug (GCC)
-[ ] TriCore Debug (TASKING)
-[ ] TriCore Release (GCC)
-[ ] TriCore Release (TASKING)
-```
-
-Then:
-
-```text
-Project -> Clean
-Project -> Build
-```
-
-Expected build log should include:
-
-```text
-Application/Src/Button.o
-Application/Src/Buzzer.o
-Application/Src/Fault_Manager.o
-Application/Src/Ethernet_Handler.o
-```
-
----
-
-## 10. Common Issues
+## 9. Common Issues
 
 ### Issue: `unresolved external: Button_Init`
 
@@ -626,7 +556,7 @@ X102 pin 39 / P14.4 ---- Button ---- X102 pin 3 or 4 / GND
 
 ---
 
-## 11. Key Concepts to Remember
+## 10. Key Concepts to Remember
 
 ### Active-low button
 
@@ -671,7 +601,7 @@ It affects this variable only, not all variables in the program.
 
 ---
 
-## 12. Final Quick Flow
+## 11. Final Quick Flow
 
 ```text
 Button press
@@ -722,7 +652,7 @@ Buzzer_Off()
 
 ---
 
-## 13. Current Project Status
+## 12. Current Project Status
 
 Completed:
 
