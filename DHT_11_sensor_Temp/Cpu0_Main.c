@@ -10,7 +10,7 @@ IFX_ALIGN(4) IfxCpu_syncEvent cpuSyncEvent = 0; /* Create CPU synchronization ev
 #define DHT11_PIN &MODULE_P33, 3    /* Define DHT11 DATA pin: P33.3 */
 #define BUZZER_PIN &MODULE_P33, 0   /* Define onboard buzzer pin: P33.0 */
 
-#define TEMP_THRESHOLD_C 18U        /* Alarm threshold temperature */
+#define TEMP_THRESHOLD_C 35U        /* Alarm threshold temperature */
 
 #define DHT11_START_LOW_MS 20U      /* DHT11 start signal LOW time */
 #define DHT11_POWER_UP_MS 2000U     /* Wait after power-up before first DHT11 read */
